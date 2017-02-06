@@ -1,0 +1,34 @@
+---
+- name: Run sg template
+  template: src=security_groups.j2 dest=./roles/rhtps.private-aws/vars/rules.yml
+
+- name: Load sg vars
+  include_vars: rules.yml
+
+#- name: Update rules
+#  ec2_group:
+#    name: "{{ cluster_id }}-sg"
+#    description: "{{ cluster_id }} security group"
+#    region: "{{ ec2_region }}"
+#    vpc_id: "{{ public_vpc_id }}"
+#    rules: "{{ security_rules }}"
+#    rules_egress:
+#      - proto: all
+#        cidr_ip: 0.0.0.0/0
+
+- name: Update rules
+  ec2_group:
+    name: "{{ cluster_id }}-sg"
+    description: "{{ cluster_id }} security group"
+    region: "{{ ec2_region }}"
+    vpc_id: "{{ public_vpc_id }}"
+    rules:
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0
+      - proto: all
+        group_name: "{{ cluster_id }}-sg"
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0

@@ -1,0 +1,48 @@
+---
+#- name: create the Route 53 hosted zone
+#  route53_zone:
+#    zone: "{{ r53_zone }}"
+#    state: present
+# TODO: unfuck the above
+
+- name: Create ec2 public vpc
+  ec2_vpc:
+    state: present
+    dns_support: yes
+    dns_hostnames: yes
+    cidr_block: "{{ public_cidr_b }}"
+    resource_tags:
+      env: "{{ cluster_id }}"
+      Name: "{{ cluster_id }}-public"
+    region: "{{ ec2_region }}"
+    subnets:
+    - cidr: "{{ public_cidr_c_sidea }}"
+      az: "{{ ec2_region_sidea }}"
+      resource_tags:
+        env: "{{ cluster_id }}"
+        Name: "{{ cluster_id }}-public-sidea"
+        parent_vpc: "{{ cluster_id }}-public"
+    - cidr: "{{ public_cidr_c_sideb }}"
+      az: "{{ ec2_region_sideb }}"
+      resource_tags:
+        env: "{{ cluster_id }}"
+        Name: "{{ cluster_id }}-public-sideb"
+        parent_vpc: "{{ cluster_id }}-public"
+    internet_gateway: yes
+    wait: yes
+  register: public_vpc
+
+- name: Set up public subnet route tables
+  ec2_vpc_route_table:
+    vpc_id: "{{ public_vpc.vpc_id }}"
+    region: "{{ ec2_region }}"
+    tags:
+      Name: public
+      env: "{{ cluster_id }}"
+    subnets:
+      - "{{ public_vpc.subnets.0.id }}"
+      - "{{ public_vpc.subnets.1.id }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ public_vpc.igw_id }}"
+  register: public_route_table

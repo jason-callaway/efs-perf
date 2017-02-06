@@ -1,0 +1,42 @@
+- block:
+    - set_fact:
+        meta_size: "{{ gluster_num_devs * gluster_dev_size / 200 }}"
+      when: gluster_num_devs * gluster_dev_size / 200 < 16
+
+    - set_fact:
+        meta_size: "16"
+      when: gluster_num_devs * gluster_dev_size / 200 >= 16
+
+    - name: Copy partition script
+      template:
+        src: partition.j2
+        dest: /tmp/partition.sh
+        owner: root
+        mode: 0700
+
+    - name: Execute the partition script
+      shell: /tmp/partition.sh
+
+    - name: Make the bricks directory
+      file:
+        path: "/bricks/brick1"
+        state: directory
+        mode: 0755
+        recurse: yes
+
+    - name: Mount the volume
+      mount:
+        name: "/bricks/brick1"
+        src: /dev/rhs_vg/brick_lv
+        fstype: xfs
+        state: mounted
+
+    - name: Create the brick sub-directory
+      file:
+        path: "/bricks/brick1/brick"
+        state: directory
+        mode: 0755
+        recurse: yes
+
+  tags:
+    - gluster_prep

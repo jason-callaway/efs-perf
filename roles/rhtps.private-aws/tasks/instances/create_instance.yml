@@ -1,0 +1,38 @@
+---
+- ec2:
+    image: "{{ ec2_image }}"
+    region: "{{ ec2_region }}"
+    key_name: "{{ ec2_keypair }}"
+#    instance_type: "{{ ec2_instance_type }}"
+    instance_type: "{{ my_type }}"
+    group_id: "{{ my_group_id }}"
+    instance_tags:
+      Name: "{{ my_Name }}"
+      instance_role: "{{ my_instance_role }}"
+      env: "{{ my_env }}"
+      side: "{{ my_side }}"
+    exact_count: "{{ item['count'] }}"
+    count_tag:
+      Name: "{{ my_Name }}"
+      instance_role: "{{ my_instance_role }}"
+      env: "{{ my_env }}"
+      side: "{{ my_side }}"
+    wait: yes
+    volumes:
+      - volume_size: "{{ item['rootvol']['size'] }}"
+        device_type: "{{ item['rootvol']['type'] }}"
+        device_name: /dev/sda1
+        delete_on_termination: True
+    assign_public_ip: yes
+    vpc_subnet_id: "{{ my_vpc_subnet_id }}"
+  with_items:
+    - "{{ my_items }}"
+  register: ec2
+
+- set_fact:
+    ec2_instances:  "{{ ec2.results[0].instances }}"
+  when: ec2.results[0].instances is defined and ec2.results[0].instances
+
+- set_fact:
+    ec2_instances: "{{ ec2.results[0].tagged_instances }}"
+  when: ec2.results[0].tagged_instances is defined and ec2.results[0].tagged_instances

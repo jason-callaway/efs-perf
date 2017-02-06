@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if mount | grep /mnt > /dev/null; then
+    umount -f /mnt
+else
+    mount -t glusterfs {{ node_fqdns[0] }}:/perfvol /mnt
+fi
+

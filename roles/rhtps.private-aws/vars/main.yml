@@ -1,0 +1,131 @@
+---
+# vars file for private-aws
+
+ec2_region: us-east-1
+ec2_region_sidea: "{{ ec2_region }}a"
+ec2_region_sideb: "{{ ec2_region }}e"
+ec2_image: ami-2051294a
+#ec2_instance_type: m4.xlarge
+ec2_username: ec2-user
+
+create_vpcs: True
+
+public_cidr_b: 10.0.0.0/16
+public_cidr_c_sidea: 10.0.1.0/24
+public_cidr_c_sideb: 10.0.2.0/24
+
+node_manifest:
+  sidea_nodes:
+    role: gluster_node
+    type: "{{ ec2_instance_type }}"
+    count: 3
+    side: a
+    rootvol:
+      size: 10
+      type: gp2
+    volumes:
+      - name: /dev/xvdb
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdc
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdd
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvde
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdf
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdg
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdh
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdi
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+
+  sideb_nodes:
+    role: gluster_node
+    type: "{{ ec2_instance_type }}"
+    count: 3
+    side: b
+    rootvol:
+      size: 10
+      type: gp2
+    volumes:
+      - name: /dev/xvdb
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdc
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdd
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvde
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdf
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdg
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdh
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+      - name: /dev/xvdi
+        type: gp2
+        size: "{{ gluster_dev_size}}"
+
+client_manifest:
+  clients:
+    role: gluster_client
+    type: "{{ ec2_instance_type }}"
+    count: 1
+    rootvol:
+      size: 100
+      type: gp2
+
+# Note, for this perf testing, we're using VPC internal names and IPs.
+# If you want to use external names or IPs you'll have to create security
+# groups permitting the inbound traffic, but I'm currently running into a
+# limitation with the number of rules per group and the number of groups
+# per interface. Need to research further for production.
+sg_tcp_ports:
+  - from: 22
+    to: 22
+  - from: 111
+    to: 111
+  - from: 139
+    to: 139
+  - from: 445
+    to: 445
+  - from: 965
+    to: 965
+  - from: 2049
+    to: 2049
+  - from: 24007
+    to: 24007
+  - from: 24009
+    to: 24108
+  - from: 38465
+    to: 38466
+  - from: 38468
+    to: 38469
+  - from: 39543
+    to: 39543
+  - from: 49152
+    to: 49251
+
+sg_udp_ports:
+  - from: 111
+    to: 111
+  - from: 963
+    to: 963
+

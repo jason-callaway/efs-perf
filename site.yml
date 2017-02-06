@@ -1,0 +1,262 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  become: false
+  tasks:
+    - replace:
+        dest: inventory/aws/hosts/ec2.ini
+        regexp: "^# instance_filters = tag:env=staging"
+        replace: "instance_filters = tag:env={{ cluster_id }}"
+    - replace:
+        dest: inventory/aws/hosts/ec2.ini
+        regexp: "^instance_filters = tag:env=(.*)"
+        replace: "instance_filters = tag:env={{ cluster_id }}"
+    - file:
+        path: inventory/static
+        state: directory
+
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  become: false
+  roles:
+    - rhtps.private-aws
+  tags:
+    - infrastructure_deploy
+
+- hosts: tag_instance_role_gluster_node
+  connection: ssh
+  gather_facts: yes
+  become: true
+  pre_tasks:
+    - meta: refresh_inventory
+  roles:
+    - gluster-install
+    - gluster-configure
+  tags:
+    - gluster_install
+
+- hosts: tag_instance_role_gluster_node
+  connection: ssh
+  gather_facts: no
+  become: true
+  tasks:
+    - name: ensure glusterd is running
+      service:
+        name: glusterd
+        state: restarted
+        enabled: yes
+  tags:
+    - perf_harness
+
+- hosts: tag_instance_role_gluster_node[0]
+  connection: ssh
+  gather_facts: no
+  become: true
+  tasks:
+    - name: copy the peer probe script
+      copy:
+        src: ./peer_probe.sh
+        dest: /tmp/peer_probe.sh
+        owner: root
+        mode: 755
+    - name: execute the peer probe script
+      shell: "/tmp/peer_probe.sh"
+  tags:
+    - perf_harness
+
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  become: false
+  pre_tasks:
+    - meta: refresh_inventory
+  tasks:
+    - debug: var=groups
+    - name: initialize node variables
+      set_fact:
+        node_fqdns: "{{ [] }}"
+        sidea_fqdns: "{{ [] }}"
+        sideb_fqdns: "{{ [] }}"
+        alternate_fqdns: "{{ [] }}"
+    - name: isolate gluster node fqdns
+      set_fact:
+        node_fqdns: "{{ node_fqdns + [hostvars[item].ec2_private_dns_name] }}"
+      with_items:
+        - "{{ groups['tag_instance_role_gluster_node'] }}"
+    - name: isolate sidea fqdns
+      set_fact:
+        sidea_fqdns: "{{ sidea_fqdns + [hostvars[item].ec2_private_dns_name] }}"
+      with_items:
+        - "{{ groups['tag_side_sidea'] }}"
+    - name: isolate sideb fqdns
+      set_fact:
+        sideb_fqdns: "{{ sideb_fqdns + [hostvars[item].ec2_private_dns_name] }}"
+      with_items:
+        - "{{ groups['tag_side_sideb'] }}"
+    - name: alternate side fqnds
+      set_fact:
+        alternate_fqdns: "{{ alternate_fqdns + [item[0]] + [item[1]] }}"
+      with_together:
+        - "{{ sidea_fqdns }}"
+        - "{{ sideb_fqdns }}"
+    - name: create the distributed-replicated script
+      template:
+        src: distributed-replicated.j2
+        dest: ./files/distributed-replicated.sh
+    - name: create dispersed script
+      template:
+        src: dispersed.j2
+        dest: ./files/dispersed.sh
+    - name: create the mount script
+      template:
+        src: mount_volume.j2
+        dest: ./files/mount_volume.sh
+  tags:
+    - perf_templates
+    - perf_harness
+    - perf_run
+
+- hosts: tag_instance_role_gluster_node
+  connection: ssh
+  gather_facts: yes
+  become: true
+  tasks:
+    - name: "apply the {{ io_profile }} tuned profile"
+      shell: "tuned-adm profile rhgs-{{ io_profile }}-io"
+  tags:
+    - perf_harness
+
+# unmount client
+
+- hosts: tag_instance_role_gluster_node
+  connection: ssh
+  gather_facts: yes
+  become: true
+  tasks:
+    - name: ensure glusterd is running
+      service:
+        name: glusterd
+        state: started
+    - name: "destroy {{ volume_name }} volume"
+      shell: "(echo y) | gluster volume delete {{ volume_name }}"
+      ignore_errors: yes
+    - name: stop glusterd service
+      service:
+        name: glusterd
+        state: stopped
+    - name: clear out bricks directories
+      shell: >
+        glusterd --xlator-option *.upgrade=on -N;
+        rm -Rf /bricks/brick1/brick/.glusterfs;
+        setfattr -x trusted.glusterfs.volume-id /bricks/brick1/brick;
+        setfattr -x trusted.gfid /bricks/brick1/brick;
+      ignore_errors: yes
+    - name: ensure glusterd is running
+      service:
+        name: glusterd
+        state: started
+        enabled: yes
+  tags:
+    - perf_harness
+    - clean_all
+
+- hosts: tag_instance_role_gluster_node[0]
+  connection: ssh
+  gather_facts: yes
+  become: true
+  tasks:
+    - name: "copy the {{ volume_type }} script"
+      copy:
+        src: "./{{ volume_type }}.sh"
+        dest: "/tmp/{{ volume_type }}.sh"
+        owner: root
+        mode: 755
+    - name: "execute the {{ volume_type }} script"
+      shell: "/tmp/{{ volume_type }}.sh"
+  tags:
+    - perf_harness
+    - clean_all
+
+- hosts: tag_instance_role_gluster_client
+  connection: ssh
+  gather_facts: yes
+  become: true
+  tasks:
+    - name: ensure EPEL is installed
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: installed
+
+    - name: install PTS and Gluster client
+      yum:
+        name: phoronix-test-suite, glusterfs, glusterfs-fuse, gcc, gcc-c++, make, autoconf, automake, glibc-devel, glibc-headers, patch, libaio-devel, fio, bzip2
+        state: latest
+        enablerepo: epel
+
+    - name: copy the mount script
+      copy:
+        src: ./mount_volume.sh
+        dest: /tmp/mount_volume.sh
+        owner: root
+        mode: 755
+
+    - name: execute the mount script
+      shell: /tmp/mount_volume.sh
+
+    - name: copy the pts config file
+      copy:
+        src: ./phoronix-test-suite.xml
+        dest: /etc/phoronix-test-suite.xml
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: make the results directory
+      file:
+        path: /root/phoronix-test-suite/test-results
+        recurse: yes
+        state: directory
+
+    - name: install the flexible IO test suite
+      shell: phoronix-test-suite install fio
+
+#    Size options:
+#    1:  4KB
+#    2:  8KB
+#    3:  16KB
+#    4:  32KB
+#    5:  64KB
+#    6:  128KB
+#    7:  256KB
+#    8:  512KB
+#    9:  1MB
+#    10: 2MB
+#    11: 4MB
+#    12: 8MB
+#    13: 16MB
+#    14: 32MB
+#    15: 64MB
+#    16: 128MB
+#    17: Test All Options
+    - name: run the tests for sequential io (takes up to 3 hours)
+      shell: "(echo 3,4; echo 1; echo 3; echo 3; echo 1,4,7,10,13,16; echo 1; echo Y; echo {{ ansible_date_time.iso8601 }}; echo rhgs-sequential-io; echo m4.2xlarge with x8 GP2) | phoronix-test-suite run fio"
+      when: io_profile == "sequential"
+      async: 10800
+      poll: 60
+
+    - name: run the tests for sequential io (takes up to 3 hours)
+      shell: "(echo 1,2; echo 1; echo 3; echo 3; echo 1,4,7,10,13,16; echo 1; echo Y; echo {{ ansible_date_time.iso8601 }}; echo rhgs-sequential-io; echo m4.2xlarge with x8 GP2) | phoronix-test-suite run fio"
+      when: io_profile == "random"
+      async: 10800
+      poll: 60
+
+    - name: collect the results
+      shell: "phoronix-test-suite result-file-to-json {{ ansible_date_time.iso8601 }}"
+      register: pts
+
+    - name: save the results
+      local_action: copy content={{ pts.stdout_lines }} dest=./results_{{ ec2_instance_type }}_{{ io_profile }}_{{ io_file_size }}_{{ volume_type }}.json
+  tags:
+    - perf_run

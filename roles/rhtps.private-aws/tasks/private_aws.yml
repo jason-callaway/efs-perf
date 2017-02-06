@@ -1,0 +1,6 @@
+---
+# tasks file for private-aws
+- include: vpc.yml
+  when: create_vpcs
+- include: instances.yml
+- include: security_groups.yml

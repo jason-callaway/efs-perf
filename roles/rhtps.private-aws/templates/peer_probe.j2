@@ -1,0 +1,8 @@
+#!/bin/bash
+
+{% for i in ec2_instances %}
+if [ `hostname` != "{{ i.private_dns_name }}" ]; then
+    gluster peer probe {{ i.private_dns_name }}
+fi
+
+{% endfor %}

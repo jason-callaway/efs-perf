@@ -1,0 +1,12 @@
+Host 192.168.*
+  ProxyCommand ssh -W %h:%p bastion.{{ cluster_id }}.{{ r53_zone }} -F ./ssh_bastion.cfg
+  IdentityFile ~/crypto/{{ cluster_id }}.pem
+
+Host bastion.{{ cluster_id }}.{{ r53_zone }}
+  Hostname bastion.{{ cluster_id }}.{{ r53_zone }}
+  User {{ ec2_username }}
+  IdentityFile ~/crypto/{{ cluster_id }}.pem
+  ForwardAgent yes
+  ControlMaster auto
+  ControlPath ~/.ssh/ansible-%r@%h:%p
+  ControlPersist 5m

@@ -1,0 +1,30 @@
+---
+- ec2_vpc_subnet_facts:
+    filters:
+      "tag:parent_vpc": "{{ cluster_id }}-public"
+    region: "{{ ec2_region }}"
+  register: vpc_public_subnet
+
+- set_fact:
+    public_vpc_id: "{{ vpc_public_subnet.subnets[0].vpc_id }}"
+
+- set_fact:
+    public_subnet_id_sidea: "{{ vpc_public_subnet.subnets[0].id }}"
+
+- set_fact:
+    public_subnet_id_sideb: "{{ vpc_public_subnet.subnets[1].id }}"
+
+#- ec2_vpc_subnet_facts:
+#    filters:
+#      "tag:parent_vpc": "{{ cluster_id }}-private"
+#    region: "{{ ec2_region }}"
+#  register: vpc_private_subnet
+#
+#- set_fact:
+#    private_vpc_id: "{{ vpc_private_subnet.subnets[0].vpc_id }}"
+#
+#- set_fact:
+#    private_subnet_id_sidea: "{{ vpc_private_subnet.subnets[0].id }}"
+#
+#- set_fact:
+#    private_subnet_id_sideb: "{{ vpc_private_subnet.subnets[1].id }}"

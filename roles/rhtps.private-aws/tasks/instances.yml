@@ -1,0 +1,163 @@
+---
+- include: vpc/get_ids_created.yml
+  when: create_vpcs
+  # Sets the following facts:
+  #   public_vpc_id
+  #   public_subnet_id
+  #   private_vpc_id
+  #   private_subnet_id_sidea
+  #   private_subnet_id_sideb
+
+- include: vpc/get_ids_extant.yml
+  when: not create_vpcs
+  # Sets the following facts:
+  #   public_subnet_id
+  #   private_subnet_id_sidea
+  #   private_subnet_id_sideb
+
+- name: Create public security group
+  ec2_group:
+    name: "{{ cluster_id }}-sg"
+    description: "{{ cluster_id }} public security group"
+    region: "{{ ec2_region }}"
+    vpc_id: "{{ public_vpc_id }}"
+    rules:
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0
+    rules_egress:
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  register: public_security_group
+
+- name: Create ec2 public client instances
+  include: instances/create_instance.yml
+  vars:
+    my_type: "{{ item['type'] }}"
+    my_group_id: "{{ public_security_group.group_id }}"
+    my_Name: "{{ cluster_id }}-{{ item['role'] }}-instance"
+    my_instance_role: "{{ item['role'] }}"
+    my_env: "{{ cluster_id }}"
+    my_side: "sidea"
+    my_vpc_subnet_id: "{{ public_subnet_id_sidea }}"
+    my_items: "{{ client_manifest['clients'] }}"
+
+- name: Create ec2 public node sidea instances
+  include: instances/create_instance.yml
+  vars:
+    my_type: "{{ item['type'] }}"
+    my_group_id: "{{ public_security_group.group_id }}"
+    my_Name: "{{ cluster_id }}-{{ item['role'] }}-instance"
+    my_instance_role: "{{ item['role'] }}"
+    my_env: "{{ cluster_id }}"
+    my_side: "sidea"
+    my_vpc_subnet_id: "{{ public_subnet_id_sidea }}"
+    my_items: "{{ node_manifest['sidea_nodes'] }}"
+
+- set_fact:
+    ec2_sidea_instances: "{{ ec2_instances }}"
+
+- set_fact:
+    side_a_prime: "{{ ec2_sidea_instances[0].id }}"
+
+- name: Create ec2 public node sideb instances
+  include: instances/create_instance.yml
+  vars:
+    my_type: "{{ item['type'] }}"
+    my_group_id: "{{ public_security_group.group_id }}"
+    my_Name: "{{ cluster_id }}-{{ item['role'] }}-instance"
+    my_instance_role: "{{ item['role'] }}"
+    my_env: "{{ cluster_id }}"
+    my_side: "sideb"
+    my_vpc_subnet_id: "{{ public_subnet_id_sideb }}"
+    my_items: "{{ node_manifest['sideb_nodes'] }}"
+
+- set_fact:
+    ec2_sideb_instances: "{{ ec2_instances }}"
+
+- name: Add volumes to sidea instances
+  ec2_vol:
+    region: "{{ ec2_region }}"
+    instance: "{{ item[0].id }}"
+    volume_size: "{{ item[1]['size'] }}"
+    volume_type: "{{ item[1]['type'] }}"
+    device_name: "{{ item[1]['name'] }}"
+    delete_on_termination: yes
+  with_nested:
+    - "{{ ec2_sidea_instances }}"
+    - "{{ node_manifest['sidea_nodes']['volumes'] }}"
+
+- name: Add volumes to sideb instances
+  ec2_vol:
+    region: "{{ ec2_region }}"
+    instance: "{{ item[0].id }}"
+    volume_size: "{{ item[1]['size'] }}"
+    volume_type: "{{ item[1]['type'] }}"
+    device_name: "{{ item[1]['name'] }}"
+    delete_on_termination: yes
+  with_nested:
+    - "{{ ec2_sideb_instances }}"
+    - "{{ node_manifest['sideb_nodes']['volumes'] }}"
+
+# Because the public DNS name is no longer valid after associating the floating IP,
+# we need to update the public IP to the floating IP and DNS A records.
+# http://stackoverflow.com/questions/39493070/ansible-ec2-get-public-dns-after-associate-elastic-ip
+
+- name: Refresh gluster_node information
+  ec2_remote_facts:
+    region: "{{ ec2_region }}"
+    filters:
+      "tag:instance_role": "gluster_node"
+      instance-state-name: running
+  register: ec2
+
+- set_fact:
+    ec2_instances:  "{{ ec2.instances }}"
+  when: ec2.instances is defined and ec2.instances
+
+- set_fact:
+    ec2_instances: "{{ ec2.tagged_instances }}"
+  when: ec2.tagged_instances is defined and ec2tagged_instances
+
+- debug: var=ec2_instances
+
+- name: make peer probe script for later use
+  template:
+    src: peer_probe.j2
+    dest: ./peer_probe.sh
+
+# ec2_remote_facts uses private_ip_address instead of private_ip for some reason
+# This sucks so using a hack to assign the proper one regardless
+#
+#- name: make list of internal ips
+#  set_fact:
+#    private_ip_item: "{{ item.private_ip if 'private_ip' in item else item.private_ip_address }}"
+#  with_items:
+#    - "{{ ec2_public_instances }}"
+#    - "{{ ec2_private_instances }}"
+#  register: private_ips_result
+#
+#- name: make a better list of internal ips
+#  set_fact:
+#    private_ips: "{{ private_ips_result.results | map(attribute='ansible_facts.private_ip_item') | list }}"
+#
+#- name: add instances to host group
+#  add_host: name={{ item.public_dns_name }} groups=private_aws
+#  with_items:
+#    - "{{ ec2_public_instances }}"
+#    - "{{ ec2_private_instances }}"
+
+- name: Wait for SSH to come up on public instances
+  wait_for: host={{ item.public_dns_name }} port=22 delay=0 timeout=600 state=started
+  with_items:
+    - "{{ ec2_instances }}"
+
+- name: Wait for successful SSH
+  command: "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -o ConnectTimeout=10 -o UserKnownHostsFile=/dev/null {{ ec2_username }}@{{ item.public_dns_name }} echo host is up"
+  with_items:
+    - "{{ ec2_instances }}"
+  register: result
+  until: result.rc == 0
+  retries: 10
+  delay: 60

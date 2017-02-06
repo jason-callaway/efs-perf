@@ -1,0 +1,22 @@
+#!/bin/bash
+
+lvs | grep brick_lv >/dev/null 2>&1
+if [ "${?}" != "0" ]; then
+    {% for g in gluster_devs %}
+    wipefs -a {{ g }}
+    {% endfor %}
+
+    pvcreate --dataalignment 1280K {% for g in gluster_devs %}{{ g }} {% endfor %}
+
+    vgcreate --physicalextentsize 128K rhs_vg {% for g in gluster_devs %}{{ g }} {% endfor %}
+
+    lvcreate -c 256 -l 100%FREE -T --name thin_pool --poolmetadatasize {{ meta_size | float }}G rhs_vg
+
+    # Turning off zeroing for better performance
+    lvchange --zero n rhs_vg/thin_pool
+
+    # TODO: need to test this with 1TB volumes
+    lvcreate --thin --name brick_lv --virtualsize {{ gluster_num_devs * gluster_dev_size - meta_size | float - 0.1 }}G rhs_vg/thin_pool
+
+    mkfs.xfs -i size=512 /dev/rhs_vg/brick_lv
+fi

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+volume_create () {
+    # gluster volume create {{ volume_name }} disperse-data {{ dispersed_data }} redundancy {{ dispersed_redundancy }} {% for h in sidea_fqdns[:-1] %}{{ h }}:/bricks/brick1/brick {% endfor %} {% for h in sideb_fqdns[:-1] %}{{ h }}:/bricks/brick1/brick {% endfor %} {{ sidea_fqdns[-1] }}:/bricks/brick1/brick {{ sideb_fqdns[-1] }}:/bricks/brick1/brick
+    # gluster volume create {{ volume_name }} disperse-data {{ dispersed_data }} redundancy {{ dispersed_redundancy }} {% for h in node_fqdns %}{{ h }}:/bricks/brick1/brick {% endfor %}
+
+    (echo y) | gluster volume create {{ volume_name }} disperse {% for h in node_fqdns %}{{ h }}:/bricks/brick1/brick {% endfor %}
+
+    gluster volume start {{ volume_name }}
+    gluster volume set {{ volume_name }} disperse.eager-lock off
+    gluster volume set {{ volume_name }} performance.client-io-threads on
+    gluster volume set {{ volume_name }} client.event-threads 4
+    gluster volume set {{ volume_name }} cluster.lookup-optimize on
+
+}
+
+status=`gluster volume status {{ volume_name }} 2>&1`
+if [[ "${status}" =~  "does not exist" ]]; then
+    volume_create
+fi
+if [[ "${status}" =~  "is not started" ]]; then
+    (echo y) | gluster volume delete {{ volume_name }}
+    volume_create
+fi
+if [[ "${status}" =~  "Status of volume" ]]; then
+    (echo y) | gluster volume stop {{ volume_name }}
+    (echo y) | gluster volume delete {{ volume_name }}
+    volume_create
+fi
+

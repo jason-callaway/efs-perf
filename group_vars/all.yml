@@ -1,0 +1,30 @@
+---
+cluster_id: gluster_perf
+r53_zone: rhtps.io
+ec2_keypair: "{{ lookup('env','ec2_keypair') }}"
+rhn_username: "{{ lookup('env','rhn_username') }}"
+rhn_password: "{{ lookup('env','rhn_password') }}"
+rhn_pool: "{{ lookup('env','rhn_pool') }}"
+
+# affects tests primarily by network bandwidth
+ec2_instance_type: m4.2xlarge
+
+# gluster_hosts and devs needs to match rhtps.private-aws node manifest count
+# and volumes count
+gluster_num_clients: 1
+gluster_num_hosts: 6
+gluster_num_devs: 8
+# gluster_dev_size is in GBs
+gluster_dev_size: 10
+
+io_profile: sequential
+io_file_size: large
+#io_profile: random
+#io_file_size: small
+#volume_type: distributed-replicated
+volume_type: dispersed
+replica_count: 2
+dispersed_redundancy: 2
+dispersed_data: "{{ gluster_num_hosts - dispersed_redundancy }}"
+#volume_type: dispersed
+volume_name: perfvol

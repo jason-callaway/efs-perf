@@ -1,0 +1,18 @@
+---
+security_rules:
+{% for instance in ec2_instances %}
+{% for tcp in sg_tcp_ports %}
+  - proto: tcp
+    from_port: {{ tcp.from }}
+    to_port: {{ tcp.to }}
+    cidr_ip: {{ instance.public_ip_address }}/32
+{% endfor %}
+{% for udp in sg_udp_ports %}
+  - proto: udp
+    from_port: {{ udp.from }}
+    to_port: {{ udp.to }}
+    cidr_ip: {{ instance.public_ip_address }}/32
+{% endfor %}
+{% endfor %}
+  - proto: all
+    group_name: "{{ cluster_id }}-sg"

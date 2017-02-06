@@ -1,0 +1,99 @@
+[all]
+{% for ip in ec2_private_instances %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[bastions]
+{% for ip in ec2_public_instances %}
+{{ ip.private_ip_address }}
+{% endfor %}
+
+[nodes]
+{% for ip in ec2_private_nodes_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+{% for ip in ec2_private_nodes_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[nodes_sidea]
+{% for ip in ec2_private_nodes_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[nodes_sideb]
+{% for ip in ec2_private_nodes_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[masters]
+{% for ip in ec2_private_masters_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+{% for ip in ec2_private_masters_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[master_sidea]
+{% for ip in ec2_private_masters_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[master_sideb]
+{% for ip in ec2_private_masters_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[bind]
+{% for ip in ec2_private_bind_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+{% for ip in ec2_private_bind_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[bind_sidea]
+{% for ip in ec2_private_bind_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[bind_sideb]
+{% for ip in ec2_private_bind_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[etcd]
+{% for ip in ec2_private_etcd_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+{% for ip in ec2_private_etcd_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[etcd_sidea]
+{% for ip in ec2_private_etcd_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[etcd_sideb]
+{% for ip in ec2_private_etcd_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[lb]
+{% for ip in ec2_private_lb_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+{% for ip in ec2_private_lb_sideb %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[lb_sidea]
+{% for ip in ec2_private_lb_sidea %}
+{{ ip.private_ip }}
+{% endfor %}
+
+[lb_sideb]
+{% for ip in ec2_private_lb_sideb %}
+{{ ip.private_ip }}
+{% endfor %}

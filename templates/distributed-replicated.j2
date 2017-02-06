@@ -1,0 +1,23 @@
+#!/bin/bash
+
+volume_create () {
+    gluster volume create {{ volume_name }} replica {{ replica_count }} {% for h in node_fqdns %}{{ h }}:/bricks/brick1/brick {% endfor %}
+
+    gluster volume start {{ volume_name }}
+
+}
+
+status=`gluster volume status {{ volume_name }} 2>&1`
+if [[ "${status}" =~  "does not exist" ]]; then
+    volume_create
+fi
+if [[ "${status}" =~  "is not started" ]]; then
+    (echo y) | gluster volume delete {{ volume_name }}
+    volume_create
+fi
+if [[ "${status}" =~  "Status of volume" ]]; then
+    (echo y) | gluster volume stop {{ volume_name }}
+    (echo y) | gluster volume delete {{ volume_name }}
+    volume_create
+fi
+

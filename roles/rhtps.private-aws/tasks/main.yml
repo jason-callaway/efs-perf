@@ -1,0 +1,5 @@
+---
+# tasks file for private-aws
+- include: private_aws.yml
+  tags:
+    - private_aws
